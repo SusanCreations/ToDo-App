@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -7,25 +7,40 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Alert,
 } from 'react-native';
 
 interface AddListModalProps {
   visible: boolean;
   onClose: () => void;
-  onSave: (items: string[]) => void;
+  onSave: (listTitle: string, items: string[]) => void;
+  initialTitle?: string;
   initialItems?: string[];
   title: string;
 }
 
-export default function AddListModal({ visible, onClose, onSave, initialItems = [], title }: AddListModalProps) {
-  const [listTitle, setListTitle] = useState('');
+export default function AddListModal({ visible, onClose, onSave, initialTitle = '', initialItems = [], title }: AddListModalProps) {
+  const [listTitle, setListTitle] = useState(initialTitle);
   const [items, setItems] = useState<string[]>(initialItems);
   const [newItem, setNewItem] = useState('');
+  const scrollViewRef = useRef<ScrollView>(null);
+
+  // Update items and title when initialItems/initialTitle changes or modal opens
+  useEffect(() => {
+    if (visible) {
+      setListTitle(initialTitle);
+      setItems(initialItems);
+    }
+  }, [visible, initialTitle, initialItems]);
 
   const addItem = () => {
     if (newItem.trim()) {
       setItems([...items, newItem.trim()]);
       setNewItem('');
+      // Scroll to bottom after adding item
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
     }
   };
 
@@ -34,16 +49,17 @@ export default function AddListModal({ visible, onClose, onSave, initialItems = 
   };
 
   const handleSave = () => {
-    if (listTitle.trim()) {
-      // Save just the list title, not individual items
-      onSave([listTitle.trim()]);
-    } else if (items.length > 0) {
-      // If no title, use items as list name
-      onSave([items.join(', ')]);
+    if (listTitle.trim() && items.length > 0) {
+      onSave(listTitle.trim(), items);
+      setItems([]);
+      setListTitle('');
+      setNewItem('');
+      onClose();
+    } else if (!listTitle.trim()) {
+      alert('Please enter a list title');
+    } else if (items.length === 0) {
+      alert('Please add at least one item to the list');
     }
-    setItems([]);
-    setListTitle('');
-    onClose();
   };
 
   return (
@@ -68,7 +84,7 @@ export default function AddListModal({ visible, onClose, onSave, initialItems = 
             />
           </View>
 
-          <ScrollView style={styles.itemsList}>
+          <ScrollView ref={scrollViewRef} style={styles.itemsList}>
             {items.map((item, index) => (
               <View key={index} style={styles.checkboxItem}>
                 <View style={styles.checkbox} />
@@ -95,9 +111,6 @@ export default function AddListModal({ visible, onClose, onSave, initialItems = 
           </View>
 
           <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.editButton} onPress={handleSave}>
-              <Text style={styles.buttonText}>Edit</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
               <Text style={styles.buttonText}>Save</Text>
             </TouchableOpacity>
@@ -120,7 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     width: '85%',
-    maxHeight: '70%',
+    maxHeight: '80%',
   },
   modalTitle: {
     fontSize: 18,
@@ -144,7 +157,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   itemsList: {
-    maxHeight: 200,
+    minHeight: 150,
+    maxHeight: 300,
     marginBottom: 15,
   },
   checkboxItem: {
@@ -201,13 +215,6 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     gap: 10,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: '#B4A5C7',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
   },
   saveButton: {
     flex: 1,

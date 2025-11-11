@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Alert,
   KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -31,13 +32,16 @@ export default function AddTask() {
   const { addTask, addTaskToTop, updateTask, tasks } = useTasks();
   const { id } = useLocalSearchParams();
   const [showMenu, setShowMenu] = useState(false);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const descriptionRef = useRef<View>(null);
 
   const [title, setTitle] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState<Date | null>(null);
   const [dueTime, setDueTime] = useState<Date | null>(null);
-  const [addList, setAddList] = useState<string[]>([]);
+  const [addList, setAddList] = useState<Array<{ title: string; items: string[] }>>([]);
+  const [editingListIndex, setEditingListIndex] = useState<number | null>(null);
   const [repeat, setRepeat] = useState("Don't repeat");
   const [shareWith, setShareWith] = useState<string[]>([]);
   const [subTasks, setSubTasks] = useState<string[]>([]);
@@ -91,7 +95,19 @@ export default function AddTask() {
       }
 
       if (taskToEdit.addList) {
-        setAddList(taskToEdit.addList.split(', '));
+        // Try to parse as JSON array of list objects, fallback to old format
+        try {
+          const parsed = JSON.parse(taskToEdit.addList);
+          if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'object') {
+            setAddList(parsed);
+          } else {
+            // Old format: convert to new format
+            setAddList([{ title: 'List', items: taskToEdit.addList.split(', ') }]);
+          }
+        } catch {
+          // Old format: convert to new format
+          setAddList([{ title: 'List', items: taskToEdit.addList.split(', ') }]);
+        }
       }
       setRepeat(taskToEdit.repeat || "Don't repeat");
       if (taskToEdit.share) {
@@ -159,7 +175,7 @@ export default function AddTask() {
       category: categories.length > 0 ? categories.join(', ') : undefined,
       description: description.trim() || undefined,
       dueDateTime: formatDateTime() !== 'Select date/time' ? formatDateTime() : undefined,
-      addList: addList.length > 0 ? addList.join(', ') : undefined,
+      addList: addList.length > 0 ? JSON.stringify(addList) : undefined,
       repeat: repeat,
       share: shareWith.length > 0 ? shareWith.join(', ') : undefined,
       subTasks: subTasks.length > 0 ? subTasks : undefined,
@@ -230,14 +246,17 @@ export default function AddTask() {
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidingView}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollView}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.scrollViewContent}
+          showsVerticalScrollIndicator={true}
+          onScrollBeginDrag={() => Keyboard.dismiss()}
         >
         {/* Header */}
         <View style={styles.header}>
@@ -297,7 +316,10 @@ export default function AddTask() {
             <Text style={styles.label}>Add Category:</Text>
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowCategoryModal(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowCategoryModal(true);
+              }}
             >
               <Text style={categories.length > 0 ? styles.inputText : styles.placeholderText}>
                 {categories.length > 0 ? categories.join(', ') : 'Select categories'}
@@ -322,7 +344,7 @@ export default function AddTask() {
           </View>
 
           {/* Description */}
-          <View style={styles.field}>
+          <View style={styles.field} ref={descriptionRef}>
             <Text style={styles.label}>Description:</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -332,6 +354,17 @@ export default function AddTask() {
               placeholderTextColor="#999"
               multiline
               numberOfLines={3}
+              onFocus={() => {
+                setTimeout(() => {
+                  descriptionRef.current?.measureLayout(
+                    scrollViewRef.current as any,
+                    (x, y) => {
+                      scrollViewRef.current?.scrollTo({ y: y - 20, animated: true });
+                    },
+                    () => {}
+                  );
+                }, 100);
+              }}
             />
           </View>
 
@@ -340,7 +373,10 @@ export default function AddTask() {
             <Text style={styles.label}>Due Date/Time:</Text>
             <TouchableOpacity
               style={styles.dateTimeButton}
-              onPress={() => setShowDatePicker(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowDatePicker(true);
+              }}
             >
               <Text style={styles.inputText}>{formatDateTime()}</Text>
               <Text style={styles.calendarIcon}>📅</Text>
@@ -348,7 +384,10 @@ export default function AddTask() {
             {dueDate && (
               <TouchableOpacity
                 style={styles.timeButton}
-                onPress={() => setShowTimePicker(true)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setShowTimePicker(true);
+                }}
               >
                 <Text style={styles.timeButtonText}>Set Time 🕐</Text>
               </TouchableOpacity>
@@ -360,23 +399,34 @@ export default function AddTask() {
             <Text style={styles.label}>Add List:</Text>
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowAddListModal(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setEditingListIndex(null);
+                setShowAddListModal(true);
+              }}
             >
-              <Text style={addList.length > 0 ? styles.inputText : styles.placeholderText}>
-                {addList.length > 0 ? `${addList.length} items` : 'Create a list'}
+              <Text style={styles.placeholderText}>
+                Create a list
               </Text>
               <Text style={styles.plusIcon}>+</Text>
             </TouchableOpacity>
             {addList.length > 0 && (
-              <TouchableOpacity
-                style={styles.listItemsContainer}
-                onPress={() => setShowAddListModal(true)}
-                activeOpacity={0.7}
-              >
-                {addList.map((item, index) => (
-                  <Text key={index} style={styles.listItemText}>• {item}</Text>
+              <View style={styles.listsContainer}>
+                {addList.map((list, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.listItemsContainer}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setEditingListIndex(index);
+                      setShowAddListModal(true);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.listTitleText}>{list.title}</Text>
+                  </TouchableOpacity>
                 ))}
-              </TouchableOpacity>
+              </View>
             )}
           </View>
 
@@ -385,7 +435,10 @@ export default function AddTask() {
             <Text style={styles.label}>Repeat:</Text>
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowRepeatDropdown(!showRepeatDropdown)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowRepeatDropdown(!showRepeatDropdown);
+              }}
             >
               <Text style={styles.inputText}>{repeat}</Text>
               <Text style={styles.dropdownArrow}>▼</Text>
@@ -421,7 +474,10 @@ export default function AddTask() {
             <Text style={styles.label}>Share:</Text>
             <TouchableOpacity
               style={styles.dropdownButton}
-              onPress={() => setShowShareModal(true)}
+              onPress={() => {
+                Keyboard.dismiss();
+                setShowShareModal(true);
+              }}
             >
               <Text style={shareWith.length > 0 ? styles.inputText : styles.placeholderText}>
                 {shareWith.length > 0 ? shareWith.join(', ') : 'Share with...'}
@@ -436,6 +492,7 @@ export default function AddTask() {
             <TouchableOpacity
               style={styles.dropdownButton}
               onPress={() => {
+                Keyboard.dismiss();
                 // TODO: Navigate to sub-task screen
                 alert('Sub-task screen coming soon!');
               }}
@@ -452,7 +509,10 @@ export default function AddTask() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.buttonPrimary]}
-            onPress={() => handleSave('today')}
+            onPress={() => {
+              Keyboard.dismiss();
+              handleSave('today');
+            }}
           >
             <Text style={styles.buttonText}>
               {isEditMode ? 'Save Changes' : 'Add to todays tasks'}
@@ -462,7 +522,10 @@ export default function AddTask() {
           {!isEditMode && (
             <TouchableOpacity
               style={[styles.button, styles.buttonSecondary]}
-              onPress={() => handleSave('general')}
+              onPress={() => {
+                Keyboard.dismiss();
+                handleSave('general');
+              }}
             >
               <Text style={styles.buttonText}>Add to General task list</Text>
             </TouchableOpacity>
@@ -537,10 +600,25 @@ export default function AddTask() {
       {/* Add List Modal */}
       <AddListModal
         visible={showAddListModal}
-        onClose={() => setShowAddListModal(false)}
-        onSave={(items) => setAddList(items)}
-        initialItems={addList}
-        title="Add List"
+        onClose={() => {
+          setShowAddListModal(false);
+          setEditingListIndex(null);
+        }}
+        onSave={(listTitle, items) => {
+          if (editingListIndex !== null) {
+            // Edit existing list
+            const updatedLists = [...addList];
+            updatedLists[editingListIndex] = { title: listTitle, items };
+            setAddList(updatedLists);
+          } else {
+            // Add new list
+            setAddList([...addList, { title: listTitle, items }]);
+          }
+          setEditingListIndex(null);
+        }}
+        initialTitle={editingListIndex !== null ? addList[editingListIndex]?.title : ''}
+        initialItems={editingListIndex !== null ? addList[editingListIndex]?.items : []}
+        title={editingListIndex !== null ? "Edit List" : "Add List"}
       />
 
       {/* Share Modal */}
@@ -702,13 +780,22 @@ const styles = StyleSheet.create({
     color: '#666',
     fontWeight: 'bold',
   },
-  listItemsContainer: {
+  listsContainer: {
     marginTop: 10,
+    gap: 10,
+  },
+  listItemsContainer: {
     backgroundColor: '#F5F5F5',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  listTitleText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
   },
   listItemText: {
     fontSize: 14,
