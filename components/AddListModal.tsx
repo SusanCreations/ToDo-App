@@ -8,6 +8,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 
 interface AddListModalProps {
@@ -70,52 +72,65 @@ export default function AddListModal({ visible, onClose, onSave, initialTitle = 
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <View style={styles.modalContainer}>
-          <Text style={styles.modalTitle}>{title}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingContainer}
+        >
+          <View style={styles.modalContainer}>
+            <ScrollView
+              contentContainerStyle={styles.modalContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <Text style={styles.modalTitle}>{title}</Text>
 
-          <View style={styles.titleSection}>
-            <Text style={styles.label}>Title:</Text>
-            <TextInput
-              style={styles.titleInput}
-              value={listTitle}
-              onChangeText={setListTitle}
-              placeholder="Enter list title"
-              placeholderTextColor="#999"
-            />
-          </View>
+              <View style={styles.titleSection}>
+                <Text style={styles.label}>Title:</Text>
+                <TextInput
+                  style={styles.titleInput}
+                  value={listTitle}
+                  onChangeText={setListTitle}
+                  placeholder="Enter list title"
+                  placeholderTextColor="#999"
+                />
+              </View>
 
-          <ScrollView ref={scrollViewRef} style={styles.itemsList}>
-            {items.map((item, index) => (
-              <View key={index} style={styles.checkboxItem}>
-                <View style={styles.checkbox} />
-                <Text style={styles.itemText}>{item}</Text>
-                <TouchableOpacity onPress={() => removeItem(index)}>
-                  <Text style={styles.removeButton}>✕</Text>
+              {items.length > 0 && (
+                <ScrollView ref={scrollViewRef} style={styles.itemsList} nestedScrollEnabled>
+                  {items.map((item, index) => (
+                    <View key={index} style={styles.checkboxItem}>
+                      <View style={styles.checkbox} />
+                      <Text style={styles.itemText}>{item}</Text>
+                      <TouchableOpacity onPress={() => removeItem(index)}>
+                        <Text style={styles.removeButton}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+
+              <View style={styles.addItemSection}>
+                <TextInput
+                  style={styles.newItemInput}
+                  value={newItem}
+                  onChangeText={setNewItem}
+                  placeholder="Add new item..."
+                  placeholderTextColor="#999"
+                  onSubmitEditing={addItem}
+                />
+                <TouchableOpacity style={styles.addButton} onPress={addItem}>
+                  <Text style={styles.addButtonText}>+</Text>
                 </TouchableOpacity>
               </View>
-            ))}
-          </ScrollView>
 
-          <View style={styles.addItemSection}>
-            <TextInput
-              style={styles.newItemInput}
-              value={newItem}
-              onChangeText={setNewItem}
-              placeholder="Add new item..."
-              placeholderTextColor="#999"
-              onSubmitEditing={addItem}
-            />
-            <TouchableOpacity style={styles.addButton} onPress={addItem}>
-              <Text style={styles.addButtonText}>+</Text>
-            </TouchableOpacity>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                  <Text style={styles.buttonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-
-          <View style={styles.buttonRow}>
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.buttonText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -128,22 +143,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  keyboardAvoidingContainer: {
+    width: '85%',
+    maxHeight: '85%',
+  },
   modalContainer: {
     backgroundColor: '#D4C5E8',
     borderRadius: 20,
-    padding: 20,
-    width: '85%',
-    maxHeight: '80%',
+    maxHeight: '100%',
+    overflow: 'hidden',
+  },
+  modalContent: {
+    padding: 15,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 15,
   },
   titleSection: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
   label: {
     fontSize: 14,
@@ -157,17 +178,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   itemsList: {
-    minHeight: 150,
-    maxHeight: 300,
-    marginBottom: 15,
+    maxHeight: 120,
+    marginBottom: 12,
   },
   checkboxItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    padding: 10,
+    padding: 8,
     borderRadius: 6,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   checkbox: {
     width: 18,
