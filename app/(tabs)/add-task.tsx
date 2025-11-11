@@ -424,6 +424,7 @@ export default function AddTask() {
                     activeOpacity={0.7}
                   >
                     <Text style={styles.listTitleText}>{list.title}</Text>
+                    <Text style={styles.editText}>Edit</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -785,17 +786,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   listItemsContainer: {
-    backgroundColor: '#F5F5F5',
-    padding: 12,
+    backgroundColor: '#E8DFF5',
+    padding: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: '#D4C5E8',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   listTitleText: {
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
+  },
+  editText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
   },
   listItemText: {
     fontSize: 14,

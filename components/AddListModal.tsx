@@ -26,6 +26,7 @@ export default function AddListModal({ visible, onClose, onSave, initialTitle = 
   const [items, setItems] = useState<string[]>(initialItems);
   const [newItem, setNewItem] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
+  const newItemInputRef = useRef<TextInput>(null);
 
   // Update items and title when initialItems/initialTitle changes or modal opens
   useEffect(() => {
@@ -39,10 +40,10 @@ export default function AddListModal({ visible, onClose, onSave, initialTitle = 
     if (newItem.trim()) {
       setItems([...items, newItem.trim()]);
       setNewItem('');
-      // Scroll to bottom after adding item
+      // Scroll without animation
       setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: true });
-      }, 100);
+        scrollViewRef.current?.scrollToEnd({ animated: false });
+      }, 50);
     }
   };
 
@@ -92,6 +93,9 @@ export default function AddListModal({ visible, onClose, onSave, initialTitle = 
                   onChangeText={setListTitle}
                   placeholder="Enter list title"
                   placeholderTextColor="#999"
+                  returnKeyType="next"
+                  onSubmitEditing={() => newItemInputRef.current?.focus()}
+                  blurOnSubmit={false}
                 />
               </View>
 
@@ -111,12 +115,15 @@ export default function AddListModal({ visible, onClose, onSave, initialTitle = 
 
               <View style={styles.addItemSection}>
                 <TextInput
+                  ref={newItemInputRef}
                   style={styles.newItemInput}
                   value={newItem}
                   onChangeText={setNewItem}
                   placeholder="Add new item..."
                   placeholderTextColor="#999"
+                  returnKeyType="done"
                   onSubmitEditing={addItem}
+                  blurOnSubmit={false}
                 />
                 <TouchableOpacity style={styles.addButton} onPress={addItem}>
                   <Text style={styles.addButtonText}>+</Text>
