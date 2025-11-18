@@ -31,7 +31,7 @@ export default function General() {
   const generalTasks = tasks.filter(t => t.destination === 'general' && !t.completed);
 
   const handleCheckboxPress = (task: any) => {
-    const top20Tasks = tasks.filter(t => t.destination === 'top20' && !t.completed);
+    const top20Tasks = tasks.filter(t => t.destination === 'today' && !t.completed);
 
     if (top20Tasks.length >= 20) {
       // Show alert about bumping bottom task
@@ -44,14 +44,14 @@ export default function General() {
           {
             text: 'Confirm',
             onPress: () => {
-              updateTask(task.id, { destination: 'top20' });
+              updateTask(task.id, { destination: 'today' });
               updateTask(bottomTask.id, { destination: 'general' });
             }
           }
         ]
       );
     } else {
-      updateTask(task.id, { destination: 'top20' });
+      updateTask(task.id, { destination: 'today' });
     }
   };
 

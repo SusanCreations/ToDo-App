@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useTasks, CATEGORIES } from './TaskContext';
+import { useTasks } from './TaskContext';
 import MenuModal from '../../components/MenuModal';
 import AddListModal from '../../components/AddListModal';
 import ShareModal from '../../components/ShareModal';
@@ -29,7 +29,7 @@ const REPEAT_OPTIONS = [
 ];
 
 export default function AddTask() {
-  const { addTask, addTaskToTop, updateTask, tasks } = useTasks();
+  const { addTask, addTaskToTop, updateTask, tasks, categories: allCategories, addCategory } = useTasks();
   const { id } = useLocalSearchParams();
   const [showMenu, setShowMenu] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -58,6 +58,31 @@ export default function AddTask() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [showAddListModal, setShowAddListModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+
+  // Category search and filter states
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [filteredCategories, setFilteredCategories] = useState(allCategories);
+
+  // Update filtered categories when search query or all categories change
+  useEffect(() => {
+    if (categorySearchQuery.trim() === '') {
+      setFilteredCategories(allCategories);
+    } else {
+      const query = categorySearchQuery.toLowerCase();
+      const filtered = allCategories.filter(cat =>
+        cat.name.toLowerCase().includes(query)
+      );
+      // Sort: matching categories first, then alphabetically
+      filtered.sort((a, b) => {
+        const aStartsWith = a.name.toLowerCase().startsWith(query);
+        const bStartsWith = b.name.toLowerCase().startsWith(query);
+        if (aStartsWith && !bStartsWith) return -1;
+        if (!aStartsWith && bStartsWith) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      setFilteredCategories(filtered);
+    }
+  }, [categorySearchQuery, allCategories]);
 
   // Populate form when editing
   useEffect(() => {
@@ -127,7 +152,7 @@ export default function AddTask() {
   }, [taskToEdit]);
 
   const getCategoryColor = (categoryName: string) => {
-    const cat = CATEGORIES.find(c => c.name === categoryName);
+    const cat = allCategories.find(c => c.name === categoryName);
     return cat?.color || '#E0E0E0';
   };
 
@@ -137,6 +162,42 @@ export default function AddTask() {
     } else {
       setCategories([...categories, categoryName]);
     }
+  };
+
+  const handleAddNewCategory = () => {
+    const newCategoryName = categorySearchQuery.trim();
+
+    if (newCategoryName === '') {
+      return;
+    }
+
+    // Check if category already exists (case insensitive)
+    const exists = allCategories.some(cat =>
+      cat.name.toLowerCase() === newCategoryName.toLowerCase()
+    );
+
+    if (exists) {
+      Alert.alert('Category Exists', 'This category already exists in your list.');
+      return;
+    }
+
+    Alert.alert(
+      'Add Category',
+      `Add "${newCategoryName}" to categories?`,
+      [
+        {
+          text: 'Back',
+          style: 'cancel'
+        },
+        {
+          text: 'Add',
+          onPress: () => {
+            addCategory(newCategoryName);
+            setCategorySearchQuery('');
+          }
+        }
+      ]
+    );
   };
 
   const formatDateTime = () => {
@@ -180,6 +241,7 @@ export default function AddTask() {
       share: shareWith.length > 0 ? shareWith.join(', ') : undefined,
       subTasks: subTasks.length > 0 ? subTasks : undefined,
       destination: destination,
+      completed: false, // Ensure task is not completed when saving
     };
 
     // Check if trying to add to Top 20 when it's full
@@ -516,21 +578,19 @@ export default function AddTask() {
             }}
           >
             <Text style={styles.buttonText}>
-              {isEditMode ? 'Save Changes' : 'Add to todays tasks'}
+              {isEditMode ? 'Add to todays tasks' : 'Add to todays tasks'}
             </Text>
           </TouchableOpacity>
 
-          {!isEditMode && (
-            <TouchableOpacity
-              style={[styles.button, styles.buttonSecondary]}
-              onPress={() => {
-                Keyboard.dismiss();
-                handleSave('general');
-              }}
-            >
-              <Text style={styles.buttonText}>Add to General task list</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.button, styles.buttonSecondary]}
+            onPress={() => {
+              Keyboard.dismiss();
+              handleSave('general');
+            }}
+          >
+            <Text style={styles.buttonText}>Add to General task list</Text>
+          </TouchableOpacity>
         </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -560,14 +620,37 @@ export default function AddTask() {
         animationType="slide"
         transparent={true}
         visible={showCategoryModal}
-        onRequestClose={() => setShowCategoryModal(false)}
+        onRequestClose={() => {
+          setShowCategoryModal(false);
+          setCategorySearchQuery('');
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Categories</Text>
             <Text style={styles.modalSubtitle}>You can select multiple</Text>
+
+            {/* Search Bar with Add Button */}
+            <View style={styles.searchContainer}>
+              <TextInput
+                style={styles.searchInput}
+                value={categorySearchQuery}
+                onChangeText={setCategorySearchQuery}
+                placeholder="Search or add new category..."
+                placeholderTextColor="#999"
+              />
+              {categorySearchQuery.trim() !== '' && filteredCategories.length === 0 && (
+                <TouchableOpacity
+                  style={styles.addCategoryButton}
+                  onPress={handleAddNewCategory}
+                >
+                  <Text style={styles.addCategoryButtonText}>Add</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
             <ScrollView style={styles.categoryList}>
-              {CATEGORIES.map((cat) => (
+              {filteredCategories.map((cat) => (
                 <TouchableOpacity
                   key={cat.name}
                   style={[
@@ -587,10 +670,19 @@ export default function AddTask() {
                   <Text style={styles.categoryText}>{cat.name}</Text>
                 </TouchableOpacity>
               ))}
+              {filteredCategories.length === 0 && categorySearchQuery.trim() !== '' && (
+                <View style={styles.noCategoriesFound}>
+                  <Text style={styles.noCategoriesText}>No categories found</Text>
+                  <Text style={styles.noCategoriesSubtext}>Tap "Add" to create a new category</Text>
+                </View>
+              )}
             </ScrollView>
             <TouchableOpacity
               style={styles.modalSaveButton}
-              onPress={() => setShowCategoryModal(false)}
+              onPress={() => {
+                setShowCategoryModal(false);
+                setCategorySearchQuery('');
+              }}
             >
               <Text style={styles.modalSaveText}>Done</Text>
             </TouchableOpacity>
@@ -901,7 +993,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '70%',
+    height: '85%',
   },
   modalTitle: {
     fontSize: 20,
@@ -922,9 +1014,9 @@ const styles = StyleSheet.create({
   categoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     borderRadius: 8,
-    marginBottom: 8,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: 'rgba(0,0,0,0.1)',
   },
@@ -962,5 +1054,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#333',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  addCategoryButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  addCategoryButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noCategoriesFound: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  noCategoriesText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  noCategoriesSubtext: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
   },
 });

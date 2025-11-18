@@ -9,12 +9,12 @@ import {
   Alert,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useTasks, CATEGORIES } from './TaskContext';
+import { useTasks } from './TaskContext';
 import MenuModal from '../../components/MenuModal';
 
 export default function TaskView() {
   const { id } = useLocalSearchParams();
-  const { tasks, updateTask, deleteTask, getCategoryColor } = useTasks();
+  const { tasks, updateTask, moveTaskToTop, deleteTask, getCategoryColor } = useTasks();
   const [showMenu, setShowMenu] = useState(false);
 
   const task = tasks.find(t => t.id === id);
@@ -42,7 +42,7 @@ export default function TaskView() {
 
   const handleMoveTask = () => {
     const isInGeneral = task.destination === 'general';
-    const targetDestination = isInGeneral ? 'top20' : 'general';
+    const targetDestination = isInGeneral ? 'today' : 'general';
     const title = isInGeneral ? 'Move to Top 20' : 'Move to General';
     const message = isInGeneral
       ? 'Move this task to the Top 20 list?'
@@ -56,13 +56,15 @@ export default function TaskView() {
         {
           text: 'Move',
           onPress: () => {
-            updateTask(task.id, { destination: targetDestination });
-            // Navigate to the destination list with highlighted task
+            // Use moveTaskToTop when moving from General to Top 20 to place it at the top
             if (isInGeneral) {
-              // Moving to Top 20 - go to index (Top 20 tab)
+              moveTaskToTop(task.id, { destination: targetDestination });
+              // Navigate to Top 20 with highlighted task
               router.replace(`/?highlight=${task.id}`);
             } else {
-              // Moving to General - go to general tab
+              // Use regular updateTask when moving to General
+              updateTask(task.id, { destination: targetDestination });
+              // Navigate to General with highlighted task
               router.replace(`/general?highlight=${task.id}`);
             }
           }
@@ -87,8 +89,8 @@ export default function TaskView() {
 
         {/* Tabs */}
         <View style={styles.tabs}>
-          <View style={[styles.tab, task.destination === 'top20' && styles.tabActive]}>
-            <Text style={[styles.tabText, task.destination === 'top20' && styles.tabTextActive]}>
+          <View style={[styles.tab, task.destination === 'today' && styles.tabActive]}>
+            <Text style={[styles.tabText, task.destination === 'today' && styles.tabTextActive]}>
               Top 20
             </Text>
           </View>

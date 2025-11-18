@@ -14,9 +14,10 @@ import {
 import { router, useLocalSearchParams } from 'expo-router';
 import { useTasks } from './TaskContext';
 import MenuModal from '../../components/MenuModal';
+import ToastNotification from '../../components/ToastNotification';
 
 export default function Index() {
-  const { tasks, updateTask, addTask, deleteTask, isLoading, getCategoryColor } = useTasks();
+  const { tasks, updateTask, addTask, completeRecurringTask, deleteTask, isLoading, getCategoryColor } = useTasks();
   const [showMenu, setShowMenu] = useState(false);
   const { highlight } = useLocalSearchParams();
   const [highlightedTaskId, setHighlightedTaskId] = useState<string | null>(
@@ -39,16 +40,38 @@ export default function Index() {
   const [selectedRepeatType, setSelectedRepeatType] = useState<'daily' | 'weekly' | 'fortnightly' | 'monthly' | null>(null);
   const [shouldEdit, setShouldEdit] = useState(false);
 
-  // Filter to only show today's tasks
-  const todayTasks = tasks.filter(task => task.destination === 'today');
+  // Toast notification state
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  // Filter to only show today's tasks that are not completed
+  const todayTasks = tasks.filter(task => task.destination === 'today' && !task.completed);
 
   // Function to handle when a task checkbox is tapped
   const handleTaskComplete = (task: any) => {
     if (task.completed) {
       updateTask(task.id, { completed: false });
     } else {
-      setSelectedTask(task);
-      setShowFirstModal(true);
+      // Check if task is recurring
+      if (task.isRecurring) {
+        // Handle recurring task - no modal needed
+        completeRecurringTask(task.id);
+
+        // Move top General task to bottom of Top 20
+        const generalTasks = tasks.filter(t => t.destination === 'general' && !t.completed);
+        if (generalTasks.length > 0) {
+          const topGeneralTask = generalTasks[0];
+          updateTask(topGeneralTask.id, { destination: 'today' });
+
+          // Show toast notification
+          setToastMessage('A new task has been added to your top 20.');
+          setShowToast(true);
+        }
+      } else {
+        // Non-recurring task - show modal
+        setSelectedTask(task);
+        setShowFirstModal(true);
+      }
     }
   };
 
@@ -74,17 +97,59 @@ export default function Index() {
 
     switch (option) {
       case 'edit':
+        // Navigate to add-task page with task data for editing
         updateTask(selectedTask.id, { completed: true });
-        setShouldEdit(true);
         setShowFirstModal(false);
-        setShowRepeatModal(true);
+        router.push(`/add-task?id=${selectedTask.id}`);
+        setSelectedTask(null);
         break;
-        
+
       case 'no-edit':
+        // Show alert to choose destination
         updateTask(selectedTask.id, { completed: true });
-        setShouldEdit(false);
         setShowFirstModal(false);
-        setShowRepeatModal(true);
+
+        Alert.alert(
+          'Add Task To',
+          'Where would you like to add this task?',
+          [
+            {
+              text: 'Top 20',
+              onPress: () => {
+                const newTaskId = addTask({
+                  title: selectedTask.title,
+                  category: selectedTask.category,
+                  description: selectedTask.description,
+                  destination: 'today',
+                  addList: selectedTask.addList,
+                  subTasks: selectedTask.subTasks,
+                });
+                setSelectedTask(null);
+                router.push(`/?highlight=${newTaskId}`);
+              }
+            },
+            {
+              text: 'General',
+              onPress: () => {
+                const newTaskId = addTask({
+                  title: selectedTask.title,
+                  category: selectedTask.category,
+                  description: selectedTask.description,
+                  destination: 'general',
+                  addList: selectedTask.addList,
+                  subTasks: selectedTask.subTasks,
+                });
+                setSelectedTask(null);
+                router.push(`/general?highlight=${newTaskId}`);
+              }
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+              onPress: () => setSelectedTask(null)
+            }
+          ]
+        );
         break;
         
       case 'add-next':
@@ -101,6 +166,14 @@ export default function Index() {
         
       case 'no':
         updateTask(selectedTask.id, { completed: true });
+
+        // Move top General task to bottom of Top 20
+        const generalTasks = tasks.filter(t => t.destination === 'general' && !t.completed);
+        if (generalTasks.length > 0) {
+          const topGeneralTask = generalTasks[0];
+          updateTask(topGeneralTask.id, { destination: 'today' });
+        }
+
         setShowFirstModal(false);
         setSelectedTask(null);
         break;
@@ -265,16 +338,16 @@ export default function Index() {
       <Modal animationType="fade" transparent={true} visible={showFirstModal} onRequestClose={() => setShowFirstModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Would you like to add this task to today or tomorrows list?</Text>
+            <Text style={styles.modalTitle}>Would you like to re-add this task to your Top 20 or General list?</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity style={[styles.modalButton, styles.modalButtonPrimary]} onPress={() => handleFirstModalOption('edit')}>
-                <Text style={[styles.modalButtonText, styles.modalButtonTextWhite]}>Yes. Continue with EDIT</Text>
+                <Text style={[styles.modalButtonText, styles.modalButtonTextBlack]}>Yes. Continue with EDIT</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.modalButton, styles.modalButtonPrimary]} onPress={() => handleFirstModalOption('no-edit')}>
-                <Text style={[styles.modalButtonText, styles.modalButtonTextWhite]}>Yes. Continue without EDIT</Text>
+                <Text style={[styles.modalButtonText, styles.modalButtonTextBlack]}>Yes. Continue without EDIT</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalButton} onPress={() => handleFirstModalOption('add-next')}>
-                <Text style={styles.modalButtonText}>Add next task</Text>
+              <TouchableOpacity style={[styles.modalButton, styles.modalButtonPrimary]} onPress={() => handleFirstModalOption('add-next')}>
+                <Text style={[styles.modalButtonText, styles.modalButtonTextBlack]}>Add next sub task</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalButton} onPress={() => handleFirstModalOption('no')}>
                 <Text style={styles.modalButtonText}>No</Text>
@@ -333,6 +406,13 @@ export default function Index() {
       </Modal>
 
       <MenuModal visible={showMenu} onClose={() => setShowMenu(false)} />
+
+      {/* Toast Notification */}
+      <ToastNotification
+        visible={showToast}
+        message={toastMessage}
+        onHide={() => setShowToast(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -625,8 +705,8 @@ const styles = StyleSheet.create({
     borderRadius: 10, 
     alignItems: 'center' 
   },
-  modalButtonPrimary: { 
-    backgroundColor: '#E8F5E9' 
+  modalButtonPrimary: {
+    backgroundColor: '#A5D6A7'
   },
   modalButtonRepeat: { 
     backgroundColor: '#4CAF50' 
@@ -636,8 +716,11 @@ const styles = StyleSheet.create({
     fontWeight: '600', 
     color: '#333' 
   },
-  modalButtonTextWhite: { 
-    color: 'white' 
+  modalButtonTextWhite: {
+    color: 'white'
+  },
+  modalButtonTextBlack: {
+    color: '#333'
   },
   modalCloseButton: { 
     marginTop: 15, 
